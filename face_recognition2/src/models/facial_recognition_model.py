@@ -21,9 +21,16 @@ class FacialRecognitionModel:
         self.label_map = None
         self.reverse_label_map = None
 
-        self._load_model_and_labels()
+        # self._load_model_and_labels()
 
-    def _load_model_and_labels(self):
+    @classmethod
+    async def Init_FacialRecognitionModel(self):
+        object = FacialRecognitionModel()
+        await object._load_model_and_labels()
+        return object
+
+
+    async def _load_model_and_labels(self):
         """Private method to load the trained model and label map."""
         try:
             with open(self.model_path, "rb") as model_file:
@@ -51,7 +58,7 @@ class FacialRecognitionModel:
         resized_image = cv2.resize(gray_image, (100, 100))  # Resize to match training data
         return resized_image.flatten().reshape(1, -1)
 
-    def predict(self, image):
+    async def predict(self, image):
         """Predict the class, name, and confidence for a given image.
         
         Args:
