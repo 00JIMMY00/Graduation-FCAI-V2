@@ -1,15 +1,12 @@
 import sys
 import os
-
-# Dynamically add the project root directory to PYTHONPATH
-# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-
-# Import the RecognitionController class
 from face_recognition2 import RecognitionController
 
 class DataPipeline:
     def __init__(self):
-        self.controller = RecognitionController()
+        pass
 
-    def greet(self):
-        return self.controller.greet()
+    async def start_recognition(self):
+        self.recognition_controller = RecognitionController()
+        await self.recognition_controller.start_recognition()
+        return await self.recognition_controller.get_recognition_result()

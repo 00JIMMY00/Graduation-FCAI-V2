@@ -4,7 +4,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.svm import SVC
 import pickle
-from enums.PathEnums import PathEnums
+from face_recognition2.src.helpers.enums.pathenums import PathEnums
 
 # Directory containing the captured images
 INPUT_DIR = PathEnums.INPUT_DIR.value

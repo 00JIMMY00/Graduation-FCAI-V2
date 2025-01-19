@@ -1,7 +1,7 @@
 import cv2
 import os
 from config import get_settings
-from enums.PathEnums import PathEnums
+from face_recognition2.src.helpers.enums.pathenums import PathEnums
 
 # Directory to save images
 OUTPUT_DIR = PathEnums.OUTPUT_DIR.value

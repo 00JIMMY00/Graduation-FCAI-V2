@@ -1,2 +1,2 @@
 from .data_pipeline import DataPipeline
-print("init file is executed for dummy")
+print("init file is executed for datapipeline")
