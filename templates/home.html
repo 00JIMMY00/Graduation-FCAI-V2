@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home - Face & Voice Recognition</title>
+    <style>
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .section {
+            flex: 1 1 45%;
+            min-width: 300px;
+            border: 1px solid #ccc;
+            padding: 20px;
+            box-shadow: 2px 2px 10px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <h1>Welcome to the Home Page</h1>
+    <div class="container">
+        <div class="section">
+            <h2>Face Recognition</h2>
+            <div id="face-section">
+                <!-- Face recognition content will be loaded here -->
+            </div>
+        </div>
+        <div class="section">
+            <h2>Voice to Text</h2>
+            <div id="voice-section">
+                <!-- Voice recognition content will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadSection(url, elementId) {
+            const response = await fetch(url);
+            const content = await response.text();
+            document.getElementById(elementId).innerHTML = content;
+
+            // Attach event listeners after loading the content
+            if (elementId === 'face-section') {
+                attachFaceListeners();
+            } else if (elementId === 'voice-section') {
+                attachVoiceListeners();
+            }
+        }
+
+        function attachFaceListeners() {
+            document.getElementById('startRecognition')?.addEventListener('click', async function() {
+                const response = await fetch('/face/start');
+                const data = await response.json();
+                document.getElementById('result').innerText = `Recognition Result: ${data.result}`;
+            });
+
+            document.getElementById('getResult')?.addEventListener('click', async function() {
+                const response = await fetch('/face/result');
+                const data = await response.json();
+                document.getElementById('result').innerText = `Recognition Result: ${data.result}`;
+            });
+        }
+
+        function attachVoiceListeners() {
+            document.getElementById('startRecording')?.addEventListener('click', async function() {
+                try {
+                    let response = await fetch("/voice/start");
+                    let data = await response.json();
+                    document.getElementById("transcript").textContent = data.result.text;
+                } catch (error) {
+                    console.error("Error:", error);
+                    document.getElementById("transcript").textContent = "Error processing speech.";
+                }
+            });
+        }
+
+        // Load sections
+        loadSection('/face/', 'face-section');
+        loadSection('/voice/', 'voice-section');
+    </script>
+</body>
+</html>
