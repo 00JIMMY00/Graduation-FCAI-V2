@@ -1,0 +1,98 @@
+# Text-to-Speech Converter (Bilingual)
+
+A Python-based solution for converting text files to speech with support for both Arabic and English, featuring both CLI and API modes.
+
+![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
+
+## Features ✨
+
+- **Bilingual Support**: Automatic detection of Arabic/English text
+- **Immediate Playback**: Converts and plays audio instantly
+- **Dual Interface**:
+  - Command-line tool for quick conversions
+  - REST API endpoint for integration
+- **Cross-platform**:
+  - Windows (native & WSL)
+  - Linux
+- **Smart Path Handling**: Auto-converts Windows <-> WSL paths
+- **Temporary File Management**: No residual audio files
+
+## Installation 🛠️
+
+### Requirements
+- Python 3.9+
+- Internet connection (for gTTS)
+
+```bash
+# Clone repository
+git clone https://github.com/yourusername/text2speech.git
+cd text2speech
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Linux/WSL
+venv\Scripts\activate  # Windows
+
+# Install dependencies
+pip install -r requirements.txt
+
+# For Linux/WSL audio playback
+sudo apt-get install mpg123
+
+
+
+Usage 🚀
+Command-line Mode
+# Basic conversion
+python tts_cli.py
+
+# Example input
+Enter the path to the text file: C:/Work/text2voice/input.txt
+
+API Server Mode
+
+# Start the Flask server
+python tts_api.py
+
+# Send requests (in another terminal)
+curl -X POST http://localhost:5000/tts \
+  -H "Content-Type: application/json" \
+  -d '{"text":"مرحبا! Welcome to our bilingual TTS system"}'
+
+Configuration ⚙️
+Supported File Formats
+Plain text (.txt)
+
+UTF-8 encoding required for Arabic
+
+Language Handling
+Feature	Description
+Auto-detection	Uses langdetect library
+Manual override	Set lang='ar' or lang='en'
+Mixed content	Prioritizes Arabic characters
+Dependencies 📦
+Python Packages
+
+gTTS==2.4.0
+Flask==3.0.2
+langdetect==1.0.9
+python-dotenv==1.0.0
+
+System Requirements
+```
+- Windows: Windows Media Player
+- Linux/WSL: mpg123 audio player
+```
+
+Troubleshooting 🔧
+Common Issues
+Error	Solution
+Path not found	Use forward slashes in paths (C:/path/to/file.txt)
+Namespace Gst not available	Install mpg123 and uninstall playsound
+Arabic text mispronounced	Ensure proper UTF-8 encoding
+Windows Media Player Integration
+```bash
+# For WSL users - Play audio through Windows
+python tts_cli.py --windows
+```
