@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant - Face & Voice Recognition</title>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --secondary-color: #6c757d;
+            --success-color: #28a745;
+            --error-color: #dc3545;
+            --background-color: #f8f9fa;
+            --text-color: #333;
+            --border-radius: 10px;
+            --shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: var(--background-color);
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr minmax(300px, 400px);
+            gap: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            height: 100vh;
+        }
+
+        .header {
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 15px;
+            box-shadow: var(--shadow);
+            border-radius: var(--border-radius);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            z-index: 100;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            color: var(--primary-color);
+        }
+
+        .status-indicators {
+            display: flex;
+            gap: 10px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            border-radius: 15px;
+            background: #eee;
+            font-size: 0.9rem;
+        }
+
+        .status-indicator.active {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .chat-container {
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 40px);
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .message {
+            margin: 10px 0;
+            max-width: 80%;
+            padding: 10px 15px;
+            border-radius: 15px;
+            position: relative;
+        }
+
+        .message.user {
+            background: var(--primary-color);
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 5px;
+        }
+
+        .message.bot {
+            background: #f0f0f0;
+            margin-right: auto;
+            border-bottom-left-radius: 5px;
+        }
+
+        .message .time {
+            font-size: 0.75rem;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+
+        .media-container {
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .preview-container {
+            aspect-ratio: 16/9;
+            background: #000;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            position: relative;
+        }
+
+        #cameraPreview {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .controls {
+            display: grid;
+            gap: 10px;
+        }
+
+        .message-input-container {
+            padding: 10px;
+            border-top: 1px solid #eee;
+            margin-top: 10px;
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .button {
+            min-width: 100px;  /* Ensure consistent button width */
+        }
+
+        .message-input {
+            min-width: 200px;  /* Ensure input doesn't get too small */
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+            outline: none;
+        }
+
+        .message-input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+        }
+
+        .button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: var(--border-radius);
+            background: var(--primary-color);
+            color: white;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .button.recording {
+            background: var(--error-color);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .button:hover {
+            background: #0056b3;
+        }
+
+        .button:disabled {
+            background: var(--secondary-color);
+            cursor: not-allowed;
+        }
+
+        .button.error {
+            background: var(--error-color);
+        }
+
+        .button.success {
+            background: var(--success-color);
+        }
+
+        .audio-visualizer {
+            height: 50px;
+            background: #f0f0f0;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .audio-bars {
+            display: flex;
+            align-items: flex-end;
+            height: 100%;
+            padding: 5px;
+            gap: 2px;
+        }
+
+        .audio-bar {
+            flex: 1;
+            background: var(--primary-color);
+            min-width: 3px;
+            transition: height 0.1s ease;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+
+            .header {
+                position: fixed;
+                width: 100%;
+                top: 0;
+                left: 0;
+                border-radius: 0;
+            }
+
+            .chat-container {
+                margin-top: 70px;
+            }
+        }
+
+        .loading {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.2rem;
+        }
+
+        .error-message {
+            color: var(--error-color);
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: var(--border-radius);
+            background: rgba(220, 53, 69, 0.1);
+            border: 1px solid var(--error-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>AI Assistant</h1>
+        <div class="status-indicators">
+            <div class="status-indicator" id="cameraStatus">
+                <span class="icon">📷</span>
+                <span class="text">Camera</span>
+            </div>
+            <div class="status-indicator" id="micStatus">
+                <span class="icon">🎤</span>
+                <span class="text">Microphone</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="chat-container">
+            <div class="chat-messages" id="chatMessages">
+                <div class="message bot">
+                    <div class="content">Welcome! I'm your AI assistant. Use the controls on the right to start our conversation.</div>
+                    <div class="time">Now</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="media-container">
+            <div class="preview-container">
+                <video id="cameraPreview" autoplay muted playsinline></video>
+                <div class="loading" id="cameraLoading" style="display: none;">
+                    Initializing camera...
+                </div>
+            </div>
+
+            <div class="audio-visualizer">
+                <div class="audio-bars" id="audioBars">
+                    <!-- Audio bars will be added dynamically -->
+                </div>
+            </div>
+
+            <div class="message-input-container">
+                <div class="input-wrapper">
+                    <input type="text" id="messageInput" placeholder="Type your message..." class="message-input">
+                    <button class="button" id="recordButton">
+                        <span class="icon">🎤</span>
+                        Record
+                    </button>
+                    <button class="button" id="sendButton">
+                        <span class="icon">📤</span>
+                        Send
+                    </button>
+                </div>
+            </div>
+
+            <div class="controls">
+                <button class="button" id="startButton">
+                    <span class="icon">▶️</span>
+                    Start Recognition
+                </button>
+                <button class="button error" id="stopButton" style="display: none;">
+                    <span class="icon">⏹️</span>
+                    Stop
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class ChatInterface {
+            constructor() {
+                this.chatMessages = document.getElementById('chatMessages');
+                this.cameraPreview = document.getElementById('cameraPreview');
+                this.cameraLoading = document.getElementById('cameraLoading');
+                this.startButton = document.getElementById('startButton');
+                this.stopButton = document.getElementById('stopButton');
+                this.cameraStatus = document.getElementById('cameraStatus');
+                this.micStatus = document.getElementById('micStatus');
+                this.audioBars = document.getElementById('audioBars');
+                this.messageInput = document.getElementById('messageInput');
+                this.sendButton = document.getElementById('sendButton');
+                this.recordButton = document.getElementById('recordButton');
+                
+                this.isProcessing = false;
+                this.stream = null;
+                this.lastRecognizedUser = null;
+                
+                // Create audio bars
+                for (let i = 0; i < 50; i++) {
+                    const bar = document.createElement('div');
+                    bar.className = 'audio-bar';
+                    bar.style.height = '0%';
+                    this.audioBars.appendChild(bar);
+                }
+
+                this.initializeEventListeners();
+            }
+
+            initializeEventListeners() {
+                this.startButton.addEventListener('click', () => this.startRecognition());
+                this.stopButton.addEventListener('click', () => this.stopRecognition());
+                this.sendButton.addEventListener('click', () => this.sendManualMessage());
+                this.messageInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.sendManualMessage();
+                    }
+                });
+                this.recordButton.addEventListener('click', () => this.toggleRecording());
+            }
+
+            async toggleRecording() {
+                if (!this.lastRecognizedUser) {
+                    this.addErrorMessage("Please start face recognition first to identify yourself.");
+                    return;
+                }
+
+                await this.startRecording();
+            }
+
+            async startRecording() {
+                if (!this.lastRecognizedUser) {
+                    this.addErrorMessage("Please start face recognition first to identify yourself.");
+                    return;
+                }
+
+                try {
+                    // Update UI to show recording state
+                    this.recordButton.classList.add('recording');
+                    this.recordButton.innerHTML = '<span class="icon">⏺️</span>Recording...';
+                    this.recordButton.disabled = true;
+                    this.messageInput.disabled = true;
+                    this.sendButton.disabled = true;
+
+                    this.addMessage('Recording... Please speak now.', 'bot');
+
+                    // Call the voice recognition endpoint
+                    const response = await fetch('./start', {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json'
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    if (data.recognition && data.recognition.message) {
+                        this.addMessage(data.recognition.message, 'user');
+                        if (data.chat_response) {
+                            let botMessage = data.chat_response.response ||
+                                           data.chat_response.message ||
+                                           JSON.stringify(data.chat_response, null, 2);
+                            this.addMessage(botMessage, 'bot');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error during voice recognition:', error);
+                    this.addErrorMessage('Failed to record message. Please try again.');
+                } finally {
+                    // Reset UI
+                    this.recordButton.classList.remove('recording');
+                    this.recordButton.innerHTML = '<span class="icon">🎤</span>Record';
+                    this.recordButton.disabled = false;
+                    this.messageInput.disabled = false;
+                    this.sendButton.disabled = false;
+                }
+            }
+
+            async sendManualMessage() {
+                const message = this.messageInput.value.trim();
+                if (!message) return;
+
+                if (!this.lastRecognizedUser) {
+                    this.addErrorMessage("Please start face recognition first to identify yourself.");
+                    return;
+                }
+
+                try {
+                    // Prepare request body with stored user info
+                    // Determine user type based on recognition class
+                    const recognitionClass = (this.lastRecognizedUser && this.lastRecognizedUser.class) || '';
+                    const user_type = ['doctor', 'dean'].includes(recognitionClass.toLowerCase()) ? 'staff' : 'student';
+
+                    const recognition_result = {
+                        name: this.lastRecognizedUser.name,
+                        user_type: user_type,
+                        message: message,
+                        class: recognitionClass
+                    };
+
+                    // Debug log to verify data
+                    console.log('Sending message with data:', recognition_result);
+
+                    // Send directly to chat API
+                    const chat_api_url = "https://primary-production-5212.up.railway.app/webhook/chat/message";
+                    // First try to stringify the request
+                    let requestBody;
+                    try {
+                        requestBody = JSON.stringify(recognition_result);
+                        console.log('Request body:', requestBody);
+                    } catch (error) {
+                        console.error('Error stringifying request:', error);
+                        throw new Error('Failed to prepare request data');
+                    }
+
+                    const response = await fetch(chat_api_url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: requestBody
+                    });
+
+                    console.log('Response status:', response.status);
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        console.error('Error response body:', errorText);
+                        throw new Error(`HTTP error! status: ${response.status}, details: ${errorText}`);
+                    }
+
+                    // Add user message to chat immediately
+                    this.addMessage(message, 'user');
+                    // Clear input
+                    this.messageInput.value = '';
+
+                    // Try to parse response
+                    let responseText;
+                    try {
+                        responseText = await response.text();
+                        console.log('Raw response:', responseText);
+                        
+                        // Parse the response text into JSON
+                        try {
+                            var chat_result = JSON.parse(responseText);
+                            console.log('Initially parsed chat result:', chat_result);
+                            
+                            // If the response is wrapped in another object, extract it
+                            if (chat_result.chat_response) {
+                                chat_result = chat_result.chat_response;
+                                console.log('Extracted from chat_response:', chat_result);
+                            }
+                            
+                            // For direct API responses
+                            if (chat_result.output) {
+                                chat_result = { output: chat_result.output };
+                                console.log('Extracted output:', chat_result);
+                            }
+                        } catch (parseError) {
+                            console.error('Parse error:', parseError);
+                            throw new Error(`Failed to parse response: ${responseText}`);
+                        }
+                    } catch (error) {
+                        console.error('Error parsing response:', error);
+                        throw new Error(`Failed to parse server response: ${responseText}`);
+                    }
+                    
+                    // Handle chat response
+                    try {
+                        if (chat_result && typeof chat_result === 'object') {
+                            console.log('Processing manual message response:', chat_result);
+                            let messageContent = '';
+                            
+                            if (chat_result && chat_result.output) {
+                                messageContent = chat_result.output;
+                                console.log('Found output message:', messageContent);
+                            } else if (chat_result && typeof chat_result === 'object') {
+                                // Try to find nested output
+                                if (chat_result.chat_response && chat_result.chat_response.output) {
+                                    messageContent = chat_result.chat_response.output;
+                                    console.log('Found nested output message:', messageContent);
+                                }
+                            }
+                            
+                            if (!messageContent) {
+                                console.warn('No output message found in:', chat_result);
+                                return;
+                            }
+                            
+                            this.addMessage(messageContent, 'bot');
+                            this.addMessage(botMessage, 'bot');
+
+                            if (chat_result.error) {
+                                console.error('Chat error:', chat_result.error);
+                                this.addErrorMessage(`Chat error: ${chat_result.error}`);
+                            }
+                        } else {
+                            console.warn('Invalid chat result format:', chat_result);
+                        }
+                    } catch (error) {
+                        console.error('Error processing manual message response:', error);
+                        this.addErrorMessage('Error processing response');
+                    }
+                } catch (error) {
+                    console.error('Error sending message:', error);
+                    this.addErrorMessage(`Failed to send message: ${error.message}`);
+                }
+            }
+
+            async startRecognition() {
+                if (this.isProcessing) return;
+
+                try {
+                    this.isProcessing = true;
+                    this.startButton.style.display = 'none';
+                    this.stopButton.style.display = 'block';
+                    this.cameraLoading.style.display = 'flex';
+                    
+                    // Disable message input until recognition is complete
+                    this.messageInput.disabled = true;
+                    this.messageInput.placeholder = "Please wait for face recognition...";
+                    this.sendButton.disabled = true;
+
+                    // Request media permissions
+                    try {
+                        this.stream = await navigator.mediaDevices.getUserMedia({
+                            video: true,
+                            audio: true
+                        });
+                        
+                        this.cameraPreview.srcObject = this.stream;
+                        this.cameraStatus.classList.add('active');
+                        this.micStatus.classList.add('active');
+                        this.cameraLoading.style.display = 'none';
+                    } catch (error) {
+                        let errorMessage = 'Failed to access camera and microphone.';
+                        if (error.name === 'NotAllowedError') {
+                            errorMessage = 'Please allow access to your camera and microphone to use this feature.';
+                        } else if (error.name === 'NotFoundError') {
+                            errorMessage = 'No camera or microphone found. Please check your devices.';
+                        } else if (error.name === 'NotReadableError') {
+                            errorMessage = 'Your camera or microphone is already in use by another application.';
+                        }
+                        throw new Error(errorMessage);
+                    }
+
+                    // Start audio visualization
+                    this.startAudioVisualization();
+
+                    // Start the recognition process with retries
+                    let response;
+                    let retries = 3;
+                    while (retries > 0) {
+                        try {
+                            response = await fetch('./start', {
+                                method: 'GET',
+                                headers: {
+                                    'Accept': 'application/json'
+                                }
+                            });
+
+                            if (!response.ok) {
+                                throw new Error(`HTTP error! status: ${response.status}`);
+                            }
+                            break;
+                        } catch (error) {
+                            retries--;
+                            if (retries === 0) {
+                                throw new Error('Failed to connect to server after multiple attempts. Please check your connection.');
+                            }
+                            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
+                            this.addErrorMessage(`Connection failed, retrying... (${retries} attempts left)`);
+                        }
+                    }
+
+                    let data;
+                    try {
+                        const responseText = await response.text();
+                        console.log('Raw server response:', responseText);
+                        
+                        try {
+                            data = JSON.parse(responseText);
+                            console.log('Parsed response:', data);
+                        } catch (parseError) {
+                            console.error('JSON parse error:', parseError);
+                            throw new Error(`Failed to parse server response: ${responseText}`);
+                        }
+                        
+                        if (data.recognition) {
+                            // Determine user type based on recognition class
+                            const recognitionClass = data.recognition.class || '';
+                            const user_type = ['doctor', 'dean'].includes(recognitionClass.toLowerCase()) ? 'staff' : 'student';
+                            
+                            // Store user info for future manual messages
+                            this.lastRecognizedUser = {
+                                name: data.recognition.name,
+                                user_type: user_type,
+                                class: recognitionClass
+                            };
+                            
+                            // Enable message input
+                            this.messageInput.disabled = false;
+                            this.messageInput.placeholder = "Type your message and press Enter to send...";
+                            this.sendButton.disabled = false;
+                            
+                            // Add recognition success message
+                            this.addMessage(`Welcome ${data.recognition.name}! You can now type messages or use voice input.`, 'bot');
+                            
+                            // If there's a voice message, add it
+                            if (data.recognition.message && data.recognition.message !== "No speech input") {
+                                this.addMessage(data.recognition.message, 'user');
+                            }
+                            
+                            try {
+                                // Handle chat response if present
+                                if (data && data.chat_response) {
+                                    console.log('Processing chat response:', data.chat_response);
+                                    let botMessage = '';
+                                    // Parse and handle chat response
+                                    let responseData = data.chat_response;
+                                    console.log('Initial chat data:', responseData);
+                                    
+                                    let messageContent = '';
+                                    
+                                    if (typeof responseData === 'string') {
+                                        try {
+                                            responseData = JSON.parse(responseData);
+                                            console.log('Parsed chat data:', responseData);
+                                        } catch (e) {
+                                            console.error('Error parsing chat data:', e);
+                                        }
+                                    }
+                                    
+                                    // Extract message from the appropriate field
+                                    if (responseData && responseData.output) {
+                                        messageContent = responseData.output;
+                                        console.log('Found output message:', messageContent);
+                                    } else if (responseData && typeof responseData === 'object') {
+                                        // Try to find nested output
+                                        if (responseData.chat_response && responseData.chat_response.output) {
+                                            messageContent = responseData.chat_response.output;
+                                            console.log('Found nested output message:', messageContent);
+                                        }
+                                    }
+                                    
+                                    if (messageContent) {
+                                        this.addMessage(messageContent, 'bot');
+                                    } else {
+                                        console.warn('No output message found in:', responseData);
+                                    }
+                                }
+                                
+                                // Handle chat errors
+                                if (data && data.chat_error) {
+                                    console.error('Chat error:', data.chat_error);
+                                    this.addErrorMessage(`Chat error: ${data.chat_error}`);
+                                }
+                            } catch (error) {
+                                console.error('Error processing chat response:', error);
+                                this.addErrorMessage('Error processing chat response');
+                            }
+                        } else if (data.error) {
+                            this.addErrorMessage(data.error);
+                        }
+                    } catch (error) {
+                        console.error('Response handling error:', error);
+                        throw new Error(`Failed to handle server response: ${error.message}`);
+                    }
+
+                } catch (error) {
+                    console.error('Recognition error:', error);
+                    this.addErrorMessage(error.message);
+                } finally {
+                    this.stopRecognition();
+                }
+            }
+
+            stopRecognition() {
+                this.isProcessing = false;
+                this.startButton.style.display = 'block';
+                this.stopButton.style.display = 'none';
+
+                if (this.stream) {
+                    this.stream.getTracks().forEach(track => track.stop());
+                    this.stream = null;
+                }
+
+                this.cameraPreview.srcObject = null;
+                this.cameraStatus.classList.remove('active');
+                this.micStatus.classList.remove('active');
+
+                // Reset audio visualization
+                Array.from(this.audioBars.children).forEach(bar => {
+                    bar.style.height = '0%';
+                });
+            }
+
+            startAudioVisualization() {
+                if (!this.stream) return;
+
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(this.stream);
+                const analyser = audioContext.createAnalyser();
+                analyser.fftSize = 128;
+
+                source.connect(analyser);
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+
+                const updateBars = () => {
+                    if (!this.isProcessing) {
+                        audioContext.close();
+                        return;
+                    }
+
+                    analyser.getByteFrequencyData(dataArray);
+                    const bars = Array.from(this.audioBars.children);
+                    const step = Math.ceil(bufferLength / bars.length);
+
+                    bars.forEach((bar, index) => {
+                        const dataIndex = index * step;
+                        const value = dataArray[dataIndex] / 255.0;
+                        bar.style.height = `${value * 100}%`;
+                    });
+
+                    requestAnimationFrame(updateBars);
+                };
+
+                updateBars();
+            }
+
+            addMessage(text, type) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${type}`;
+                
+                const contentDiv = document.createElement('div');
+                contentDiv.className = 'content';
+                contentDiv.textContent = text;
+                
+                const timeDiv = document.createElement('div');
+                timeDiv.className = 'time';
+                timeDiv.textContent = new Date().toLocaleTimeString();
+                
+                messageDiv.appendChild(contentDiv);
+                messageDiv.appendChild(timeDiv);
+                
+                this.chatMessages.appendChild(messageDiv);
+                this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+            }
+
+            addErrorMessage(text) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error-message';
+                errorDiv.textContent = text;
+                this.chatMessages.appendChild(errorDiv);
+                this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+            }
+        }
+
+        // Initialize the chat interface when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            window.chatInterface = new ChatInterface();
+        });
+    </script>
+</body>
+</html>
