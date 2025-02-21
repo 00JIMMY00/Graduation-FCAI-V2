@@ -2,8 +2,12 @@ from typing import Dict, Any
 import asyncio
 import httpx
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, File, UploadFile, Form
 from fastapi.responses import HTMLResponse, JSONResponse
+from tempfile import NamedTemporaryFile
+import shutil
+import subprocess
+import os
 
 from voice2txt.src.Controllers.SpeechController import SpeechController
 from face_recognition2.src.controllers.recognition_controller import RecognitionController
@@ -42,6 +46,147 @@ async def vf_starting_page():
 
 @router.get("/start")
 async def start_processing():
+    return await process_recognition()
+
+@router.post("/start")
+async def handle_audio(
+    audio: UploadFile = File(...),
+    name: str = Form(...),
+    user_type: str = Form(...),
+    class_type: str = Form(..., alias="class")
+):
+    # Temporary file paths
+    webm_path = None
+    wav_path = None
+    
+    try:
+        # Save uploaded webm file
+        with NamedTemporaryFile(delete=False, suffix=".webm") as temp_webm:
+            shutil.copyfileobj(audio.file, temp_webm)
+            webm_path = temp_webm.name
+
+        # Convert to WAV using ffmpeg
+        wav_path = webm_path.replace('.webm', '.wav')
+        try:
+            result = subprocess.run([
+                'ffmpeg',
+                '-i', webm_path,
+                '-acodec', 'pcm_s16le',
+                '-ar', '16000',
+                '-ac', '1',
+                '-y',
+                wav_path
+            ], check=True, capture_output=True)
+            print("Audio conversion successful")
+        except subprocess.CalledProcessError as e:
+            print(f"FFmpeg error: {e.stderr.decode()}")
+            raise Exception(f"Failed to convert audio: {e.stderr.decode()}")
+
+        # Process the converted WAV file
+        speech_result = await speech_controller.process_speech(wav_path)
+        
+        # Create recognition result
+        recognition_result = {
+            "name": name,
+            "user_type": user_type,
+            "class": class_type,
+            "message": speech_result.get("text", "No speech detected")
+        }
+
+        # Send to chat API
+        chat_api_url = "https://primary-production-5212.up.railway.app/webhook/chat/message"
+        headers = {"Content-Type": "application/json"}
+        
+        async with httpx.AsyncClient() as client:
+            chat_response = await client.post(
+                chat_api_url,
+                json=recognition_result,
+                headers=headers
+            )
+            chat_result = chat_response.json()
+            
+            final_result = {
+                "recognition": recognition_result,
+                "chat_response": chat_result
+            }
+
+            if chat_result.get("error"):
+                final_result["chat_error"] = chat_result["error"]
+
+            return JSONResponse(
+                content=final_result,
+                headers=get_response_headers()
+            )
+
+    except Exception as e:
+        print(f"Error processing audio: {str(e)}")
+        return create_error_response(
+            message="Failed to process audio",
+            details=str(e)
+        )
+    finally:
+        # Cleanup temporary files
+        for path in [webm_path, wav_path]:
+            if path and os.path.exists(path):
+                import os
+                try:
+                    os.unlink(path)
+                except Exception as e:
+                    print(f"Error deleting temporary file {path}: {e}")
+
+    try:
+        # Process the audio file with speech recognition
+        speech_result = await speech_controller.process_speech(temp_file_path)
+        
+        # Create recognition result with the provided user info
+        recognition_result = {
+            "name": name,
+            "user_type": user_type,
+            "class": class_type,
+            "message": speech_result.get("text", "No speech detected")
+        }
+
+        # Send to chat API
+        chat_api_url = "https://primary-production-5212.up.railway.app/webhook/chat/message"
+        headers = {"Content-Type": "application/json"}
+        
+        async with httpx.AsyncClient() as client:
+            chat_response = await client.post(
+                chat_api_url,
+                json=recognition_result,
+                headers=headers
+            )
+            chat_result = chat_response.json()
+            
+            # Format the final response
+            final_result = {
+                "recognition": recognition_result,
+                "chat_response": chat_result
+            }
+
+            if chat_result.get("error"):
+                final_result["chat_error"] = chat_result["error"]
+
+            return JSONResponse(
+                content=final_result,
+                headers=get_response_headers()
+            )
+
+    except Exception as e:
+        print(f"Error processing audio: {str(e)}")
+        return create_error_response(
+            message="Failed to process audio",
+            details=str(e)
+        )
+    finally:
+        # Cleanup temporary file
+        import os
+        try:
+            os.unlink(temp_file_path)
+        except:
+            pass
+
+async def process_recognition():
     """Run face recognition and voice processing concurrently."""
     # Start the face recognition and voice processing concurrently
     try:

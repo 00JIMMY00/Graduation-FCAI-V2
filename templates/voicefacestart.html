@@ -157,10 +157,16 @@
 
         .input-wrapper {
             display: flex;
-            gap: 10px;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .button {
+            min-width: 100px;  /* Ensure consistent button width */
         }
 
         .message-input {
+            min-width: 200px;  /* Ensure input doesn't get too small */
             flex: 1;
             padding: 10px;
             border: 1px solid #ddd;
@@ -182,11 +188,22 @@
             color: white;
             font-size: 1rem;
             cursor: pointer;
-            transition: background-color 0.2s;
+            transition: all 0.2s;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 8px;
+        }
+
+        .button.recording {
+            background: var(--error-color);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
         }
 
         .button:hover {
@@ -313,6 +330,10 @@
             <div class="message-input-container">
                 <div class="input-wrapper">
                     <input type="text" id="messageInput" placeholder="Type your message..." class="message-input">
+                    <button class="button" id="recordButton">
+                        <span class="icon">🎤</span>
+                        Record
+                    </button>
                     <button class="button" id="sendButton">
                         <span class="icon">📤</span>
                         Send
@@ -346,6 +367,7 @@
                 this.audioBars = document.getElementById('audioBars');
                 this.messageInput = document.getElementById('messageInput');
                 this.sendButton = document.getElementById('sendButton');
+                this.recordButton = document.getElementById('recordButton');
                 
                 this.isProcessing = false;
                 this.stream = null;
@@ -371,6 +393,67 @@
                         this.sendManualMessage();
                     }
                 });
+                this.recordButton.addEventListener('click', () => this.toggleRecording());
+            }
+
+            async toggleRecording() {
+                if (!this.lastRecognizedUser) {
+                    this.addErrorMessage("Please start face recognition first to identify yourself.");
+                    return;
+                }
+
+                await this.startRecording();
+            }
+
+            async startRecording() {
+                if (!this.lastRecognizedUser) {
+                    this.addErrorMessage("Please start face recognition first to identify yourself.");
+                    return;
+                }
+
+                try {
+                    // Update UI to show recording state
+                    this.recordButton.classList.add('recording');
+                    this.recordButton.innerHTML = '<span class="icon">⏺️</span>Recording...';
+                    this.recordButton.disabled = true;
+                    this.messageInput.disabled = true;
+                    this.sendButton.disabled = true;
+
+                    this.addMessage('Recording... Please speak now.', 'bot');
+
+                    // Call the voice recognition endpoint
+                    const response = await fetch('./start', {
+                        method: 'GET',
+                        headers: {
+                            'Accept': 'application/json'
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    if (data.recognition && data.recognition.message) {
+                        this.addMessage(data.recognition.message, 'user');
+                        if (data.chat_response) {
+                            let botMessage = data.chat_response.response ||
+                                           data.chat_response.message ||
+                                           JSON.stringify(data.chat_response, null, 2);
+                            this.addMessage(botMessage, 'bot');
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error during voice recognition:', error);
+                    this.addErrorMessage('Failed to record message. Please try again.');
+                } finally {
+                    // Reset UI
+                    this.recordButton.classList.remove('recording');
+                    this.recordButton.innerHTML = '<span class="icon">🎤</span>Record';
+                    this.recordButton.disabled = false;
+                    this.messageInput.disabled = false;
+                    this.sendButton.disabled = false;
+                }
             }
 
             async sendManualMessage() {
