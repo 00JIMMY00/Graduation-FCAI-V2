@@ -149,6 +149,31 @@
             gap: 10px;
         }
 
+        .message-input-container {
+            padding: 10px;
+            border-top: 1px solid #eee;
+            margin-top: 10px;
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 10px;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+            outline: none;
+        }
+
+        .message-input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+        }
+
         .button {
             padding: 12px 20px;
             border: none;
@@ -285,6 +310,16 @@
                 </div>
             </div>
 
+            <div class="message-input-container">
+                <div class="input-wrapper">
+                    <input type="text" id="messageInput" placeholder="Type your message..." class="message-input">
+                    <button class="button" id="sendButton">
+                        <span class="icon">📤</span>
+                        Send
+                    </button>
+                </div>
+            </div>
+
             <div class="controls">
                 <button class="button" id="startButton">
                     <span class="icon">▶️</span>
@@ -309,9 +344,12 @@
                 this.cameraStatus = document.getElementById('cameraStatus');
                 this.micStatus = document.getElementById('micStatus');
                 this.audioBars = document.getElementById('audioBars');
+                this.messageInput = document.getElementById('messageInput');
+                this.sendButton = document.getElementById('sendButton');
                 
                 this.isProcessing = false;
                 this.stream = null;
+                this.lastRecognizedUser = null;
                 
                 // Create audio bars
                 for (let i = 0; i < 50; i++) {
@@ -327,6 +365,114 @@
             initializeEventListeners() {
                 this.startButton.addEventListener('click', () => this.startRecognition());
                 this.stopButton.addEventListener('click', () => this.stopRecognition());
+                this.sendButton.addEventListener('click', () => this.sendManualMessage());
+                this.messageInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.sendManualMessage();
+                    }
+                });
+            }
+
+            async sendManualMessage() {
+                const message = this.messageInput.value.trim();
+                if (!message) return;
+
+                if (!this.lastRecognizedUser) {
+                    this.addErrorMessage("Please start face recognition first to identify yourself.");
+                    return;
+                }
+
+                try {
+                    // Prepare request body with stored user info
+                    // Determine user type based on recognition class
+                    const recognitionClass = (this.lastRecognizedUser && this.lastRecognizedUser.class) || '';
+                    const user_type = ['doctor', 'dean'].includes(recognitionClass.toLowerCase()) ? 'staff' : 'student';
+
+                    const recognition_result = {
+                        name: this.lastRecognizedUser.name,
+                        user_type: user_type,
+                        message: message,
+                        class: recognitionClass
+                    };
+
+                    // Debug log to verify data
+                    console.log('Sending message with data:', recognition_result);
+
+                    // Send directly to chat API
+                    const chat_api_url = "https://primary-production-5212.up.railway.app/webhook/chat/message";
+                    // First try to stringify the request
+                    let requestBody;
+                    try {
+                        requestBody = JSON.stringify(recognition_result);
+                        console.log('Request body:', requestBody);
+                    } catch (error) {
+                        console.error('Error stringifying request:', error);
+                        throw new Error('Failed to prepare request data');
+                    }
+
+                    const response = await fetch(chat_api_url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: requestBody
+                    });
+
+                    console.log('Response status:', response.status);
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        console.error('Error response body:', errorText);
+                        throw new Error(`HTTP error! status: ${response.status}, details: ${errorText}`);
+                    }
+
+                    // Add user message to chat immediately
+                    this.addMessage(message, 'user');
+                    // Clear input
+                    this.messageInput.value = '';
+
+                    // Try to parse response
+                    let responseText;
+                    try {
+                        responseText = await response.text();
+                        console.log('Raw response:', responseText);
+                        var chat_result = JSON.parse(responseText);
+                        console.log('Parsed chat result:', chat_result);
+                    } catch (error) {
+                        console.error('Error parsing response:', error);
+                        throw new Error(`Failed to parse server response: ${responseText}`);
+                    }
+                    
+                    // Handle chat response
+                    try {
+                        if (chat_result && typeof chat_result === 'object') {
+                            console.log('Processing manual message response:', chat_result);
+                            let botMessage = '';
+                            if (chat_result.response) {
+                                botMessage = chat_result.response;
+                            } else if (chat_result.message) {
+                                botMessage = chat_result.message;
+                            } else {
+                                botMessage = JSON.stringify(chat_result, null, 2);
+                            }
+                            this.addMessage(botMessage, 'bot');
+
+                            if (chat_result.error) {
+                                console.error('Chat error:', chat_result.error);
+                                this.addErrorMessage(`Chat error: ${chat_result.error}`);
+                            }
+                        } else {
+                            console.warn('Invalid chat result format:', chat_result);
+                        }
+                    } catch (error) {
+                        console.error('Error processing manual message response:', error);
+                        this.addErrorMessage('Error processing response');
+                    }
+                } catch (error) {
+                    console.error('Error sending message:', error);
+                    this.addErrorMessage(`Failed to send message: ${error.message}`);
+                }
             }
 
             async startRecognition() {
@@ -337,6 +483,11 @@
                     this.startButton.style.display = 'none';
                     this.stopButton.style.display = 'block';
                     this.cameraLoading.style.display = 'flex';
+                    
+                    // Disable message input until recognition is complete
+                    this.messageInput.disabled = true;
+                    this.messageInput.placeholder = "Please wait for face recognition...";
+                    this.sendButton.disabled = true;
 
                     // Request media permissions
                     try {
@@ -392,33 +543,76 @@
 
                     let data;
                     try {
-                        data = await response.json();
-                    } catch (error) {
-                        throw new Error('Failed to parse server response. Please try again.');
-                    }
-                    
-                    // Add recognition results to chat
-                    if (data.recognition) {
-                        this.addMessage(data.recognition.message, 'user');
-                        if (data.chat_response) {
-                            // Format chat response nicely
-                            let botMessage = '';
-                            if (data.chat_response.response) {
-                                botMessage = data.chat_response.response;
-                            } else if (data.chat_response.message) {
-                                botMessage = data.chat_response.message;
-                            } else {
-                                botMessage = JSON.stringify(data.chat_response, null, 2);
+                        const responseText = await response.text();
+                        console.log('Raw server response:', responseText);
+                        
+                        try {
+                            data = JSON.parse(responseText);
+                            console.log('Parsed response:', data);
+                        } catch (parseError) {
+                            console.error('JSON parse error:', parseError);
+                            throw new Error(`Failed to parse server response: ${responseText}`);
+                        }
+                        
+                        if (data.recognition) {
+                            // Determine user type based on recognition class
+                            const recognitionClass = data.recognition.class || '';
+                            const user_type = ['doctor', 'dean'].includes(recognitionClass.toLowerCase()) ? 'staff' : 'student';
+                            
+                            // Store user info for future manual messages
+                            this.lastRecognizedUser = {
+                                name: data.recognition.name,
+                                user_type: user_type,
+                                class: recognitionClass
+                            };
+                            
+                            // Enable message input
+                            this.messageInput.disabled = false;
+                            this.messageInput.placeholder = "Type your message and press Enter to send...";
+                            this.sendButton.disabled = false;
+                            
+                            // Add recognition success message
+                            this.addMessage(`Welcome ${data.recognition.name}! You can now type messages or use voice input.`, 'bot');
+                            
+                            // If there's a voice message, add it
+                            if (data.recognition.message && data.recognition.message !== "No speech input") {
+                                this.addMessage(data.recognition.message, 'user');
                             }
-                            this.addMessage(botMessage, 'bot');
+                            
+                            try {
+                                // Handle chat response if present
+                                if (data && data.chat_response) {
+                                    console.log('Processing chat response:', data.chat_response);
+                                    let botMessage = '';
+                                    if (typeof data.chat_response === 'object') {
+                                        if (data.chat_response.response) {
+                                            botMessage = data.chat_response.response;
+                                        } else if (data.chat_response.message) {
+                                            botMessage = data.chat_response.message;
+                                        } else {
+                                            botMessage = JSON.stringify(data.chat_response, null, 2);
+                                        }
+                                        this.addMessage(botMessage, 'bot');
+                                    } else {
+                                        console.warn('Unexpected chat_response format:', data.chat_response);
+                                    }
+                                }
+                                
+                                // Handle chat errors
+                                if (data && data.chat_error) {
+                                    console.error('Chat error:', data.chat_error);
+                                    this.addErrorMessage(`Chat error: ${data.chat_error}`);
+                                }
+                            } catch (error) {
+                                console.error('Error processing chat response:', error);
+                                this.addErrorMessage('Error processing chat response');
+                            }
+                        } else if (data.error) {
+                            this.addErrorMessage(data.error);
                         }
-
-                        // Handle chat errors
-                        if (data.chat_error) {
-                            this.addErrorMessage(`Chat error: ${data.chat_error}`);
-                        }
-                    } else if (data.error) {
-                        this.addErrorMessage(data.error);
+                    } catch (error) {
+                        console.error('Response handling error:', error);
+                        throw new Error(`Failed to handle server response: ${error.message}`);
                     }
 
                 } catch (error) {

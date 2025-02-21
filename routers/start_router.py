@@ -34,7 +34,7 @@ def create_error_response(message: str, details: Any = None) -> JSONResponse:
 @router.get("/", response_class=HTMLResponse)
 async def vf_starting_page():
     #Serve the HTML page for face recognition and voice2txt.
-    with open(PathEnums.voicefacestart.value, "r") as file:
+    with open(PathEnums.voicefacestart.value, "r", encoding="utf-8") as file:
         html_content = file.read()
     return HTMLResponse(content=html_content)
 
@@ -80,14 +80,16 @@ async def start_processing():
         elif not result_v or "text" not in result_v:
             recognition_result = {
                 "name": result_f["name"],
-                "userType": result_f["class"],
+                "user_type": 'staff' if result_f["class"].lower() in ['doctor', 'dean'] else 'student',
+                "class": result_f["class"],
                 "speech_error": "No speech detected",
                 "message": "No speech input"  # Default message when no speech is detected
             }
         else:
             recognition_result = {
                 "name": result_f["name"],
-                "userType": result_f["class"],
+                "user_type": 'staff' if result_f["class"].lower() in ['doctor', 'dean'] else 'student',
+                "class": result_f["class"],
                 "message": result_v["text"]
             }
         
@@ -108,7 +110,7 @@ async def start_processing():
                 final_result = {
                     "recognition": {
                         "name": recognition_result["name"],
-                        "userType": recognition_result["userType"],
+                        "user_type": recognition_result["user_type"],
                         "message": recognition_result["message"]
                     }
                 }
@@ -138,7 +140,7 @@ async def start_processing():
                 content={
                     "recognition": {
                         "name": recognition_result["name"],
-                        "userType": recognition_result["userType"],
+                        "user_type": recognition_result["user_type"],
                         "message": recognition_result["message"],
                         "speech_error": recognition_result.get("speech_error")
                     },

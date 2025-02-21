@@ -1,7 +1,7 @@
 import speech_recognition as sr
 
 class SpeechService:
-    def __init__(self, languages=("en-US", "ar-EG")):
+    def __init__(self, languages=("ar-EG", "en-US")):
         self.recognizer = sr.Recognizer()
         self.languages = languages
 
@@ -12,7 +12,8 @@ class SpeechService:
             print(f"Speak now (Supported languages: {', '.join(self.languages)})...")
 
             try:
-                audio = self.recognizer.listen(source)
+                # Increase wait time for audio input
+                audio = self.recognizer.listen(source, timeout=5, phrase_time_limit=10)
                 print("Processing your input...")
                 for language in self.languages:
                     try:
