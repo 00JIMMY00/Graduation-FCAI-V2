@@ -520,8 +520,27 @@
                     try {
                         responseText = await response.text();
                         console.log('Raw response:', responseText);
-                        var chat_result = JSON.parse(responseText);
-                        console.log('Parsed chat result:', chat_result);
+                        
+                        // Parse the response text into JSON
+                        try {
+                            var chat_result = JSON.parse(responseText);
+                            console.log('Initially parsed chat result:', chat_result);
+                            
+                            // If the response is wrapped in another object, extract it
+                            if (chat_result.chat_response) {
+                                chat_result = chat_result.chat_response;
+                                console.log('Extracted from chat_response:', chat_result);
+                            }
+                            
+                            // For direct API responses
+                            if (chat_result.output) {
+                                chat_result = { output: chat_result.output };
+                                console.log('Extracted output:', chat_result);
+                            }
+                        } catch (parseError) {
+                            console.error('Parse error:', parseError);
+                            throw new Error(`Failed to parse response: ${responseText}`);
+                        }
                     } catch (error) {
                         console.error('Error parsing response:', error);
                         throw new Error(`Failed to parse server response: ${responseText}`);
@@ -531,14 +550,25 @@
                     try {
                         if (chat_result && typeof chat_result === 'object') {
                             console.log('Processing manual message response:', chat_result);
-                            let botMessage = '';
-                            if (chat_result.response) {
-                                botMessage = chat_result.response;
-                            } else if (chat_result.message) {
-                                botMessage = chat_result.message;
-                            } else {
-                                botMessage = JSON.stringify(chat_result, null, 2);
+                            let messageContent = '';
+                            
+                            if (chat_result && chat_result.output) {
+                                messageContent = chat_result.output;
+                                console.log('Found output message:', messageContent);
+                            } else if (chat_result && typeof chat_result === 'object') {
+                                // Try to find nested output
+                                if (chat_result.chat_response && chat_result.chat_response.output) {
+                                    messageContent = chat_result.chat_response.output;
+                                    console.log('Found nested output message:', messageContent);
+                                }
                             }
+                            
+                            if (!messageContent) {
+                                console.warn('No output message found in:', chat_result);
+                                return;
+                            }
+                            
+                            this.addMessage(messageContent, 'bot');
                             this.addMessage(botMessage, 'bot');
 
                             if (chat_result.error) {
@@ -667,17 +697,37 @@
                                 if (data && data.chat_response) {
                                     console.log('Processing chat response:', data.chat_response);
                                     let botMessage = '';
-                                    if (typeof data.chat_response === 'object') {
-                                        if (data.chat_response.response) {
-                                            botMessage = data.chat_response.response;
-                                        } else if (data.chat_response.message) {
-                                            botMessage = data.chat_response.message;
-                                        } else {
-                                            botMessage = JSON.stringify(data.chat_response, null, 2);
+                                    // Parse and handle chat response
+                                    let responseData = data.chat_response;
+                                    console.log('Initial chat data:', responseData);
+                                    
+                                    let messageContent = '';
+                                    
+                                    if (typeof responseData === 'string') {
+                                        try {
+                                            responseData = JSON.parse(responseData);
+                                            console.log('Parsed chat data:', responseData);
+                                        } catch (e) {
+                                            console.error('Error parsing chat data:', e);
                                         }
-                                        this.addMessage(botMessage, 'bot');
+                                    }
+                                    
+                                    // Extract message from the appropriate field
+                                    if (responseData && responseData.output) {
+                                        messageContent = responseData.output;
+                                        console.log('Found output message:', messageContent);
+                                    } else if (responseData && typeof responseData === 'object') {
+                                        // Try to find nested output
+                                        if (responseData.chat_response && responseData.chat_response.output) {
+                                            messageContent = responseData.chat_response.output;
+                                            console.log('Found nested output message:', messageContent);
+                                        }
+                                    }
+                                    
+                                    if (messageContent) {
+                                        this.addMessage(messageContent, 'bot');
                                     } else {
-                                        console.warn('Unexpected chat_response format:', data.chat_response);
+                                        console.warn('No output message found in:', responseData);
                                     }
                                 }
                                 
