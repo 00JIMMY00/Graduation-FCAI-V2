@@ -1,7 +1,8 @@
-import pickle
+import os
 import numpy as np
 import cv2
-import os
+import pickle
+from tensorflow.keras.models import load_model
 from ..helpers import PathEnums
 
 current_directory = os.getcwd()
@@ -22,20 +23,17 @@ class FacialRecognitionModel:
         self.label_map = None
         self.reverse_label_map = None
 
-        # self._load_model_and_labels()
-
     @classmethod
     async def Init_FacialRecognitionModel(self):
-        object = FacialRecognitionModel()
-        await object._load_model_and_labels()
-        return object
-
+        obj = FacialRecognitionModel()
+        await obj._load_model_and_labels()
+        return obj
 
     async def _load_model_and_labels(self):
         """Private method to load the trained model and label map."""
         try:
-            with open(self.model_path, "rb") as model_file:
-                self.model = pickle.load(model_file)
+            # Load the CNN model using keras
+            self.model = load_model(self.model_path)
             
             with open(self.label_map_path, "rb") as label_map_file:
                 self.label_map = pickle.load(label_map_file)
@@ -57,7 +55,9 @@ class FacialRecognitionModel:
         """
         gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         resized_image = cv2.resize(gray_image, (100, 100))  # Resize to match training data
-        return resized_image.flatten().reshape(1, -1)
+        # Normalize the image and reshape to (1, 100, 100, 1) for CNN input
+        normalized_image = resized_image.astype("float32") / 255.0
+        return normalized_image.reshape(1, 100, 100, 1)
 
     async def predict(self, image):
         """Predict the class, name, and confidence for a given image.
@@ -69,7 +69,7 @@ class FacialRecognitionModel:
             dict: Prediction result containing class, name, and confidence.
         """
         preprocessed_image = self.preprocess_image(image)
-        probabilities = self.model.predict_proba(preprocessed_image)[0]
+        probabilities = self.model.predict(preprocessed_image)[0]
         predicted_label = np.argmax(probabilities)
         confidence = probabilities[predicted_label]
         label_name = self.reverse_label_map[predicted_label]

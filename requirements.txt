@@ -6,3 +6,4 @@ pydantic-settings== 2.6.1
 speechrecognition==3.8.1
 googletrans==4.0.0-rc1
 pyaudio
+tensorflow
