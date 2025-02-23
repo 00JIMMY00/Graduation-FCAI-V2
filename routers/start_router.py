@@ -20,6 +20,10 @@ router = APIRouter()
 recognition_controller = RecognitionController()
 speech_controller = SpeechController()
 
+# Add global variables to hold ongoing tasks
+current_face_task = None
+current_voice_task = None
+
 def get_response_headers() -> Dict[str, str]:
     """Get common response headers with CORS settings."""
     return {
@@ -305,6 +309,58 @@ async def get_recognition_result():
     """Fetch the recognition result without starting the process."""
     result = await recognition_controller.get_recognition_result()
     return {"status": "fetched", "result": result}
+
+# Modified /start endpoint to begin concurrent recognition without awaiting their completion
+@router.get("/start", response_class=HTMLResponse)
+async def start_recording():
+    global current_face_task, current_voice_task
+    # ...existing code if any...
+    current_face_task = asyncio.create_task(recognition_controller.start_recognition())
+    current_voice_task = asyncio.create_task(speech_controller.process_speech())
+    return {"status": "recording started"}
+
+# New /stop endpoint to stop recording, gather results and send them to the RAG API
+@router.get("/stop")
+async def stop_recording():
+    global current_face_task, current_voice_task
+    if current_face_task is None or current_voice_task is None:
+        return create_error_response("No active recording to stop")
+    
+    try:
+        # Await both tasks to complete
+        face_result = await current_face_task
+        voice_result = await current_voice_task
+    except Exception as e:
+        return create_error_response("Error during recognition", details=str(e))
+    finally:
+        current_face_task = None
+        current_voice_task = None
+
+    # Compose the recognition result based on available data
+    recognition_result = {
+        "name": face_result.get("name", "Unknown"),
+        "user_type": face_result.get("user_type", "student"),
+        "class": face_result.get("class", "N/A"),
+        "message": voice_result.get("text", "No speech detected")
+    }
+
+    # Send recognition result to the RAG API endpoint
+    chat_api_url = "https://primary-production-5212.up.railway.app/webhook/chat/message"
+    headers = {"Content-Type": "application/json"}
+    try:
+        async with httpx.AsyncClient() as client:
+            chat_response = await client.post(chat_api_url, json=recognition_result, headers=headers)
+            chat_result = chat_response.json()
+        final_result = {
+            "recognition": recognition_result,
+            "chat_response": chat_result,
+            "timestamp": chat_result.get("timestamp", None)
+        }
+        if "error" in chat_result:
+            final_result["chat_error"] = chat_result["error"]
+        return final_result
+    except Exception as e:
+        return create_error_response("Chat API error", details=str(e))
 
 
 
