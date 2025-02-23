@@ -18,7 +18,7 @@ async def start_recognition():
     """Start the face recognition process and return a result."""
     await rc.start_recognition()  # Assuming start_recognition is asynchronous
     result = await rc.get_recognition_result()  # Fetch the recognition result
-    return {"status": "completed", "result": result}
+    return {"status": "completed", "recognition": result}
 
 @router.get("/result")
 async def get_recognition_result():

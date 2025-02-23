@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
+from fastapi import UploadFile, File
 from voice2txt.src.Controllers import SpeechController
 from .pathEnums import PathEnums
 
@@ -14,9 +15,10 @@ async def voice_text_page():
 
 @router.get("/start")
 async def start_recording():
-    """Start the voice recognition process and return a result."""
-    result = SpeechController().process_speech()
-    return {"status": "completed", "result": result}
+    """Process voice input directly from microphone."""
+    controller = SpeechController()
+    result = await controller.process_speech()
+    return result
 
 @router.get("/result")
 async def get_recording_result():

@@ -385,29 +385,98 @@
             }
 
             initializeEventListeners() {
-                this.startButton.addEventListener('click', () => this.startRecognition());
-                this.stopButton.addEventListener('click', () => this.stopRecognition());
+                // Bind Start Recognition to face recognition only.
+                this.startButton.addEventListener('click', () => this.startFaceRecognition());
+                // Directly call startRecording for voice-to-text without async wrapper.
+                this.recordButton.addEventListener('click', () => this.startRecording());
+                // Bind the Stop button to stopRecording.
+                this.stopButton.addEventListener('click', () => this.stopRecording());
                 this.sendButton.addEventListener('click', () => this.sendManualMessage());
                 this.messageInput.addEventListener('keypress', (e) => {
                     if (e.key === 'Enter') {
                         this.sendManualMessage();
                     }
                 });
-                this.recordButton.addEventListener('click', () => this.toggleRecording());
             }
 
-            async toggleRecording() {
-                if (!this.lastRecognizedUser) {
-                    this.addErrorMessage("Please start face recognition first to identify yourself.");
-                    return;
-                }
+            // Renamed to clearly indicate face recognition only.
+            async startFaceRecognition() {
+                if (this.isProcessing) return;
+                try {
+                    this.isProcessing = true;
+                    this.startButton.style.display = 'none';
+                    this.stopButton.style.display = 'block';
+                    this.cameraLoading.style.display = 'flex';
+                    this.messageInput.disabled = true;
+                    this.messageInput.placeholder = "Please wait for face recognition...";
+                    this.sendButton.disabled = true;
 
-                await this.startRecording();
+                    // Request media permissions for face recognition.
+                    try {
+                        this.stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                        this.cameraPreview.srcObject = this.stream;
+                        this.cameraStatus.classList.add('active');
+                        this.micStatus.classList.add('active');
+                        this.cameraLoading.style.display = 'none';
+                    } catch (error) {
+                        let errorMessage = 'Failed to access camera and microphone.';
+                        if (error.name === 'NotAllowedError') {
+                            errorMessage = 'Please allow access to your camera and microphone.';
+                        } else if (error.name === 'NotFoundError') {
+                            errorMessage = 'No camera or microphone found.';
+                        } else if (error.name === 'NotReadableError') {
+                            errorMessage = 'Your camera or microphone is in use by another application.';
+                        }
+                        throw new Error(errorMessage);
+                    }
+
+                    // Start audio visualization.
+                    this.startAudioVisualization();
+
+                    // Trigger face recognition using the face endpoint.
+                    let response = await fetch('/face/start', {
+                        method: 'GET',
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    if (data.recognition) {
+                        const recognitionClass = data.recognition.class || '';
+                        const user_type = ['doctor', 'dean'].includes(recognitionClass.toLowerCase()) ? 'staff' : 'student';
+                        this.lastRecognizedUser = {
+                            name: data.recognition.name,
+                            user_type: user_type,
+                            class: recognitionClass
+                        };
+                        this.messageInput.disabled = false;
+                        this.messageInput.placeholder = "Type your message here...";
+                        this.sendButton.disabled = false;
+                        this.addMessage(`Welcome ${data.recognition.name}!`, 'bot');
+                        if (data.recognition.message && data.recognition.message !== "No speech input") {
+                            this.addMessage(data.recognition.message, 'user');
+                        }
+                        // Stop the recognition process to release the camera after successful recognition
+                        this.stopRecognition();
+                        // Stop the recognition process to release the camera after successful recognition
+                        this.stopRecognition();
+                    } else if (data.error) {
+                        this.addErrorMessage(data.error);
+                    }
+                    // Note: Do not call stopRecognition() here so processes run independently.
+                } catch (error) {
+                    console.error('Face recognition error:', error);
+                    this.addErrorMessage(error.message);
+                } finally {
+                    this.isProcessing = false;
+                    // Optionally leave UI controls active until user manually stops.
+                }
             }
 
             async startRecording() {
                 if (!this.lastRecognizedUser) {
-                    this.addErrorMessage("Please start face recognition first to identify yourself.");
+                    this.addErrorMessage("Please start face recognition first.");
                     return;
                 }
 
@@ -418,15 +487,12 @@
                     this.recordButton.disabled = true;
                     this.messageInput.disabled = true;
                     this.sendButton.disabled = true;
-
                     this.addMessage('Recording... Please speak now.', 'bot');
 
-                    // Call the voice recognition endpoint
-                    const response = await fetch('./start', {
+                    // Start voice recognition
+                    const response = await fetch(window.location.origin + '/voice/start', {
                         method: 'GET',
-                        headers: {
-                            'Accept': 'application/json'
-                        }
+                        headers: { 'Accept': 'application/json' }
                     });
 
                     if (!response.ok) {
@@ -434,20 +500,18 @@
                     }
 
                     const data = await response.json();
-                    if (data.recognition && data.recognition.message) {
-                        this.addMessage(data.recognition.message, 'user');
-                        if (data.chat_response) {
-                            let botMessage = data.chat_response.response ||
-                                           data.chat_response.message ||
-                                           JSON.stringify(data.chat_response, null, 2);
-                            this.addMessage(botMessage, 'bot');
-                        }
+                    
+                    if (data.status === "success" && data.message) {
+                        // Only populate the input box, don't add to chat yet
+                        this.messageInput.value = data.message;
+                    } else if (data.status === "error") {
+                        throw new Error(data.message);
                     }
                 } catch (error) {
-                    console.error('Error during voice recognition:', error);
-                    this.addErrorMessage('Failed to record message. Please try again.');
+                    console.error('Voice recognition error:', error);
+                    this.addErrorMessage('Failed to record message: ' + error.message);
                 } finally {
-                    // Reset UI
+                    // Reset UI state
                     this.recordButton.classList.remove('recording');
                     this.recordButton.innerHTML = '<span class="icon">🎤</span>Record';
                     this.recordButton.disabled = false;
@@ -563,17 +627,8 @@
                                 }
                             }
                             
-                            if (!messageContent) {
-                                console.warn('No output message found in:', chat_result);
-                                return;
-                            }
-                            
-                            this.addMessage(messageContent, 'bot');
-                            this.addMessage(botMessage, 'bot');
-
-                            if (chat_result.error) {
-                                console.error('Chat error:', chat_result.error);
-                                this.addErrorMessage(`Chat error: ${chat_result.error}`);
+                            if (messageContent) {
+                                this.addMessage(messageContent, 'bot');
                             }
                         } else {
                             console.warn('Invalid chat result format:', chat_result);
@@ -585,174 +640,6 @@
                 } catch (error) {
                     console.error('Error sending message:', error);
                     this.addErrorMessage(`Failed to send message: ${error.message}`);
-                }
-            }
-
-            async startRecognition() {
-                if (this.isProcessing) return;
-
-                try {
-                    this.isProcessing = true;
-                    this.startButton.style.display = 'none';
-                    this.stopButton.style.display = 'block';
-                    this.cameraLoading.style.display = 'flex';
-                    
-                    // Disable message input until recognition is complete
-                    this.messageInput.disabled = true;
-                    this.messageInput.placeholder = "Please wait for face recognition...";
-                    this.sendButton.disabled = true;
-
-                    // Request media permissions
-                    try {
-                        this.stream = await navigator.mediaDevices.getUserMedia({
-                            video: true,
-                            audio: true
-                        });
-                        
-                        this.cameraPreview.srcObject = this.stream;
-                        this.cameraStatus.classList.add('active');
-                        this.micStatus.classList.add('active');
-                        this.cameraLoading.style.display = 'none';
-                    } catch (error) {
-                        let errorMessage = 'Failed to access camera and microphone.';
-                        if (error.name === 'NotAllowedError') {
-                            errorMessage = 'Please allow access to your camera and microphone to use this feature.';
-                        } else if (error.name === 'NotFoundError') {
-                            errorMessage = 'No camera or microphone found. Please check your devices.';
-                        } else if (error.name === 'NotReadableError') {
-                            errorMessage = 'Your camera or microphone is already in use by another application.';
-                        }
-                        throw new Error(errorMessage);
-                    }
-
-                    // Start audio visualization
-                    this.startAudioVisualization();
-
-                    // Start the recognition process with retries
-                    let response;
-                    let retries = 3;
-                    while (retries > 0) {
-                        try {
-                            response = await fetch('./start', {
-                                method: 'GET',
-                                headers: {
-                                    'Accept': 'application/json'
-                                }
-                            });
-
-                            if (!response.ok) {
-                                throw new Error(`HTTP error! status: ${response.status}`);
-                            }
-                            break;
-                        } catch (error) {
-                            retries--;
-                            if (retries === 0) {
-                                throw new Error('Failed to connect to server after multiple attempts. Please check your connection.');
-                            }
-                            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
-                            this.addErrorMessage(`Connection failed, retrying... (${retries} attempts left)`);
-                        }
-                    }
-
-                    let data;
-                    try {
-                        const responseText = await response.text();
-                        console.log('Raw server response:', responseText);
-                        
-                        try {
-                            data = JSON.parse(responseText);
-                            console.log('Parsed response:', data);
-                        } catch (parseError) {
-                            console.error('JSON parse error:', parseError);
-                            throw new Error(`Failed to parse server response: ${responseText}`);
-                        }
-                        
-                        if (data.recognition) {
-                            // Determine user type based on recognition class
-                            const recognitionClass = data.recognition.class || '';
-                            const user_type = ['doctor', 'dean'].includes(recognitionClass.toLowerCase()) ? 'staff' : 'student';
-                            
-                            // Store user info for future manual messages
-                            this.lastRecognizedUser = {
-                                name: data.recognition.name,
-                                user_type: user_type,
-                                class: recognitionClass
-                            };
-                            
-                            // Enable message input
-                            this.messageInput.disabled = false;
-                            this.messageInput.placeholder = "Type your message and press Enter to send...";
-                            this.sendButton.disabled = false;
-                            
-                            // Add recognition success message
-                            this.addMessage(`Welcome ${data.recognition.name}! You can now type messages or use voice input.`, 'bot');
-                            
-                            // If there's a voice message, add it
-                            if (data.recognition.message && data.recognition.message !== "No speech input") {
-                                this.addMessage(data.recognition.message, 'user');
-                            }
-                            
-                            try {
-                                // Handle chat response if present
-                                if (data && data.chat_response) {
-                                    console.log('Processing chat response:', data.chat_response);
-                                    let botMessage = '';
-                                    // Parse and handle chat response
-                                    let responseData = data.chat_response;
-                                    console.log('Initial chat data:', responseData);
-                                    
-                                    let messageContent = '';
-                                    
-                                    if (typeof responseData === 'string') {
-                                        try {
-                                            responseData = JSON.parse(responseData);
-                                            console.log('Parsed chat data:', responseData);
-                                        } catch (e) {
-                                            console.error('Error parsing chat data:', e);
-                                        }
-                                    }
-                                    
-                                    // Extract message from the appropriate field
-                                    if (responseData && responseData.output) {
-                                        messageContent = responseData.output;
-                                        console.log('Found output message:', messageContent);
-                                    } else if (responseData && typeof responseData === 'object') {
-                                        // Try to find nested output
-                                        if (responseData.chat_response && responseData.chat_response.output) {
-                                            messageContent = responseData.chat_response.output;
-                                            console.log('Found nested output message:', messageContent);
-                                        }
-                                    }
-                                    
-                                    if (messageContent) {
-                                        this.addMessage(messageContent, 'bot');
-                                    } else {
-                                        console.warn('No output message found in:', responseData);
-                                    }
-                                }
-                                
-                                // Handle chat errors
-                                if (data && data.chat_error) {
-                                    console.error('Chat error:', data.chat_error);
-                                    this.addErrorMessage(`Chat error: ${data.chat_error}`);
-                                }
-                            } catch (error) {
-                                console.error('Error processing chat response:', error);
-                                this.addErrorMessage('Error processing chat response');
-                            }
-                        } else if (data.error) {
-                            this.addErrorMessage(data.error);
-                        }
-                    } catch (error) {
-                        console.error('Response handling error:', error);
-                        throw new Error(`Failed to handle server response: ${error.message}`);
-                    }
-
-                } catch (error) {
-                    console.error('Recognition error:', error);
-                    this.addErrorMessage(error.message);
-                } finally {
-                    this.stopRecognition();
                 }
             }
 
