@@ -314,10 +314,12 @@ async def get_recognition_result():
 @router.get("/start", response_class=HTMLResponse)
 async def start_recording():
     global current_face_task, current_voice_task
-    # ...existing code if any...
     current_face_task = asyncio.create_task(recognition_controller.start_recognition())
     current_voice_task = asyncio.create_task(speech_controller.process_speech())
-    return {"status": "recording started"}
+    return {
+        "status": "recording started",
+        "instruction": "Speak now (Supported languages: ar-EG, en-US)..."
+    }
 
 # New /stop endpoint to stop recording, gather results and send them to the RAG API
 @router.get("/stop")

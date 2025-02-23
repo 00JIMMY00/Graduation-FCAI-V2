@@ -26,12 +26,9 @@ class SpeechService:
     async def voice_to_text(self):
         """Record and process audio from microphone."""
         with sr.Microphone() as source:
-            print("Adjusting for ambient noise... Please wait.")
-            self.recognizer.adjust_for_ambient_noise(source, duration=0.25)
+            # Removed ambient noise adjustment for immediate start
             print(f"Speak now (Supported languages: {', '.join(self.languages)})...")
-
             try:
-                # Increase wait time for audio input
                 audio = self.recognizer.listen(source, timeout=5, phrase_time_limit=10)
                 return await self._process_audio(audio)
             except Exception as e:

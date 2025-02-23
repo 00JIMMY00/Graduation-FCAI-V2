@@ -14,6 +14,9 @@ class RecognitionController:
 
     async def initialize_camera(self):
         """Initialize the camera and model."""
+        if self.camera is not None and self.camera.isOpened():
+            print("Camera already initialized and open.")
+            return True
         # Always close any existing camera first
         if self.camera is not None:
             print("Releasing existing camera...")
@@ -59,9 +62,7 @@ class RecognitionController:
                 self.camera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)  # Set reasonable resolution
                 self.camera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
-                # Let the camera warm up
-                print(f"Camera {camera_index} opened, warming up...")
-                await asyncio.sleep(2.0)  # Extended warm-up time
+                # Removed warm-up delay for immediate start
 
                 # Test capture multiple times
                 for attempt in range(3):
@@ -74,10 +75,6 @@ class RecognitionController:
                 
             except Exception as e:
                 print(f"Error initializing camera {camera_index}: {str(e)}")
-            finally:
-                if self.camera and not ret:
-                    self.camera.release()
-                    await asyncio.sleep(0.5)
         
         print("Error: Could not access any camera. Please ensure a camera is connected and not in use by another application.")
         return False
@@ -136,11 +133,8 @@ class RecognitionController:
             raise
 
         finally:
-            # Always release the camera
-            if self.camera is not None:
-                print("Releasing camera...")
-                self.camera.release()
-                self.camera = None
+            # Removed camera release so that the camera remains open
+            pass
 
     async def get_recognition_result(self):
         print("hello from get_recognition_result")
