@@ -25,21 +25,16 @@ class SpeechService:
 
     async def voice_to_text(self):
         """Record and process audio from microphone."""
-        try:
-            with sr.Microphone() as source:
-                print("Adjusting for ambient noise... Please wait.")
-                self.recognizer.adjust_for_ambient_noise(source, duration=0.25)
-                print(f"Speak now (Supported languages: {', '.join(self.languages)})...")
 
-                audio = self.recognizer.listen(source)
-                result = await self._process_audio(audio)
-                if isinstance(result, dict) and "text" in result:
-                    return {"status": "success", "message": result["text"]}
-                return {"status": "error", "message": result.get("error", "Unknown error occurred")}
-
-        except Exception as e:
-            print(f"Error capturing audio: {e}")
-            return {"status": "error", "message": f"Audio capture error: {str(e)}"}
+        with sr.Microphone() as source:
+            # Removed ambient noise adjustment for immediate start
+            print(f"Speak now (Supported languages: {', '.join(self.languages)})...")
+            try:
+                audio = self.recognizer.listen(source, timeout=5, phrase_time_limit=10)
+                return await self._process_audio(audio)
+            except Exception as e:
+                print(f"Error capturing audio: {e}")
+                return {"error": f"Audio capture error: {str(e)}"}
 
     async def audio_file_to_text(self, file_input):
         """Process audio from a file or UploadFile, converting non-supported formats to wav."""
